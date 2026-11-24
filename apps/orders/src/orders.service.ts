@@ -23,6 +23,9 @@ export class OrdersService {
 
     @Inject('USERS_SERVICE')
     private readonly usersClient: ClientProxy,
+
+    @Inject('NOTIFICATIONS_CLIENT')
+    private readonly notificationsClient: ClientProxy,
   ) {}
 
   async create(data: CreateOrderDto) {
@@ -72,13 +75,27 @@ export class OrdersService {
     }
 
     // Persiste o pedido no banco de Orders
-    return this.prisma.order.create({
+    const order = await this.prisma.order.create({
       data: {
         userId: data.userId,
         description: data.description,
         total: data.total,
       },
     });
+
+    // Publica o evento de criação do pedido no RabbitMQ
+    await firstValueFrom(
+      this.notificationsClient.emit(
+        'order.created',
+        {
+          orderId: order.id,
+          userId: order.userId,
+          total: order.total.toString(),
+        },
+      ),
+    );
+
+    return order;
   }
 
 
