@@ -14,7 +14,10 @@ import { PrismaService } from './prisma.service.js';
 import {
   CreateOrderDto,
   UpdateOrderDto,
+  type OrderCreatedEvent,
 } from '@app/contracts';
+
+import { randomUUID } from 'node:crypto';
 
 @Injectable()
 export class OrdersService {
@@ -74,28 +77,39 @@ export class OrdersService {
       });
     }
 
-    // Persiste o pedido no banco de Orders
-    const order = await this.prisma.order.create({
-      data: {
-        userId: data.userId,
-        description: data.description,
-        total: data.total,
-      },
-    });
 
-    // Publica o evento de criação do pedido no RabbitMQ
-    await firstValueFrom(
-      this.notificationsClient.emit(
-        'order.created',
-        {
+    // Salva o pedido e o evento na mesma transação
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.create({
+          data: {
+            userId: data.userId,
+            description: data.description,
+            total: data.total,
+          },
+        });
+
+        const event: OrderCreatedEvent = {
+          eventId: randomUUID(),
           orderId: order.id,
           userId: order.userId,
           total: order.total.toString(),
-        },
-      ),
+          occurredAt: new Date().toISOString(),
+        };
+
+        await tx.outboxEvent.create({
+          data: {
+            id: event.eventId,
+            eventType: 'order.created',
+            payload: { ...event },
+          },
+        });
+
+        return order;
+      },
     );
 
-    return order;
+    return result;
   }
 
 

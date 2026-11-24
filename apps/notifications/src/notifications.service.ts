@@ -10,6 +10,11 @@ export class NotificationsService {
     userId: number;
     total: string;
   }) {
+    // Simula uma falha no processamento da notificação
+    if (data.total === '9999') {
+      throw new Error('Falha simulada');
+    }
+
     this.logger.log(
       `Notificação do pedido ${data.orderId}`,
     );

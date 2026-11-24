@@ -1,4 +1,6 @@
+
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import {
   ClientsModule,
   Transport,
@@ -7,9 +9,11 @@ import {
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 import { PrismaService } from './prisma.service.js';
+import { OutboxPublisher } from './outbox.publisher.js';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ClientsModule.register([
       {
         name: 'USERS_SERVICE',
@@ -34,6 +38,10 @@ import { PrismaService } from './prisma.service.js';
     ]),
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, PrismaService],
+  providers: [
+    OrdersService,
+    PrismaService,
+    OutboxPublisher,
+  ],
 })
 export class OrdersModule {}
