@@ -4,7 +4,10 @@ import {
   ClientsModule,
   Transport,
 } from '@nestjs/microservices';
-import { ApiGatewayController } from './api-gateway.controller.js';
+
+import { OrdersController } from './orders.controller.js';
+import { OrdersService } from './orders.service.js';
+import { PrismaService } from './prisma.service.js';
 
 @Module({
   imports: [
@@ -13,12 +16,13 @@ import { ApiGatewayController } from './api-gateway.controller.js';
         name: 'USERS_SERVICE',
         transport: Transport.TCP,
         options: {
-          host: 'localhost',
+          host: '127.0.0.1',
           port: 3001,
         },
       },
     ]),
   ],
-  controllers: [ApiGatewayController],
+  controllers: [OrdersController],
+  providers: [OrdersService, PrismaService],
 })
-export class ApiGatewayModule {}
+export class OrdersModule {}

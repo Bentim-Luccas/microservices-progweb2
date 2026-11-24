@@ -1,132 +1,682 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Microservices — Programação Web II
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Projeto acadêmico desenvolvido na disciplina **Programação Web II**, do curso de Análise e Desenvolvimento de Sistemas (ADS).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+A aplicação foi construída com **NestJS, TypeScript, Prisma ORM 7 e PostgreSQL**, utilizando uma arquitetura de microserviços com comunicação TCP e um API Gateway HTTP.
 
-## Description
+O projeto acompanha o **Tutorial NestJS — Microserviços, Parte 2**, incluindo a implementação principal e os exercícios práticos complementares propostos pelo professor.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 1. Objetivo
 
-## Project setup
+Demonstrar o desenvolvimento e a integração de microserviços utilizando NestJS, com responsabilidades separadas, comunicação entre aplicações e persistência independente de dados.
 
-```bash
-$ npm install
+Os principais objetivos são:
+
+- Implementar operações CRUD utilizando NestJS e Prisma.
+- Utilizar DTOs e validação de dados com `class-validator`.
+- Integrar microserviços por mensagens TCP.
+- Centralizar as requisições HTTP por meio de um API Gateway.
+- Separar os bancos de dados de usuários e pedidos.
+- Validar a existência de usuários antes de criar pedidos.
+- Tratar exceções RPC e erros HTTP.
+- Implementar timeouts para chamadas entre serviços.
+- Aplicar regras de negócio envolvendo diferentes microserviços.
+
+## 2. Tecnologias utilizadas
+
+- **Node.js** — ambiente de execução JavaScript.
+- **TypeScript** — linguagem utilizada no desenvolvimento.
+- **NestJS 12** — framework para construção das aplicações.
+- **NestJS Microservices** — comunicação TCP entre serviços.
+- **Prisma ORM 7** — acesso e persistência de dados.
+- **PostgreSQL 17** — banco de dados relacional.
+- **Docker** — execução do PostgreSQL em contêiner.
+- **RxJS** — comunicação assíncrona e gerenciamento de timeouts.
+- **class-validator** e **class-transformer** — validação e transformação de dados.
+- **Insomnia** — realização de testes das requisições HTTP.
+
+## 3. Arquitetura da aplicação
+
+O sistema possui três aplicações NestJS independentes, organizadas em um único repositório.
+
+| Aplicação | Porta | Protocolo | Responsabilidade |
+|---|---|---|---|
+| API Gateway | 3000 | HTTP | Receber requisições dos clientes |
+| Users Service | 3001 | TCP | Gerenciar usuários |
+| Orders Service | 3002 | TCP | Gerenciar pedidos |
+
+### Comunicação entre serviços
+
+```text
+                  Cliente HTTP
+                       |
+                       v
+                 API Gateway
+                 Porta 3000
+                       |
+              Comunicação TCP
+                       |
+             +---------+---------+
+             |                   |
+             v                   v
+       Users Service       Orders Service
+        Porta 3001           Porta 3002
+             |                   |
+             v                   v
+          users_db            orders_db
+             PostgreSQL / Docker
 ```
 
-## Compile and run the project
+O API Gateway recebe as requisições HTTP e encaminha mensagens TCP aos microserviços responsáveis.
 
-```bash
-# development
-$ npm run start
+Os microserviços possuem seus próprios bancos de dados e não acessam diretamente as tabelas pertencentes ao outro serviço.
 
-# watch mode
-$ npm run start:dev
+### Comunicação entre Users e Orders
 
-# production mode
-$ npm run start:prod
+Quando um pedido é criado, o Orders Service consulta o Users Service para verificar se o usuário informado existe.
+
+O processo ocorre da seguinte maneira:
+
+1. O cliente envia `POST /orders` ao API Gateway.
+2. O Gateway envia a mensagem TCP `orders.create`.
+3. O Orders Service recebe os dados do pedido.
+4. Orders envia `users.findOne` ao Users Service.
+5. Users consulta seu banco de dados utilizando Prisma.
+6. Se o usuário existir, Orders registra o pedido no banco `orders_db`.
+7. O resultado retorna ao cliente por meio do API Gateway.
+
+A comunicação utiliza `ClientProxy.send()` e `@MessagePattern()`, seguindo o padrão de requisição e resposta (*request-response*).
+
+## 4. Estrutura do projeto
+
+```text
+microservices-progweb2/
+|
+|-- apps/
+|   |-- api-gateway/
+|   |   |-- src/
+|   |       |-- filters/
+|   |       |-- app.module.ts
+|   |       |-- main.ts
+|   |       |-- users.controller.ts
+|   |       |-- orders.controller.ts
+|   |
+|   |-- users/
+|   |   |-- src/
+|   |       |-- filters/
+|   |       |-- main.ts
+|   |       |-- prisma.service.ts
+|   |       |-- users.module.ts
+|   |       |-- users.controller.ts
+|   |       |-- users.service.ts
+|   |
+|   |-- orders/
+|       |-- src/
+|           |-- filters/
+|           |-- main.ts
+|           |-- prisma.service.ts
+|           |-- orders.module.ts
+|           |-- orders.controller.ts
+|           |-- orders.service.ts
+|
+|-- libs/
+|   |-- contracts/
+|       |-- src/
+|           |-- users.dto.ts
+|           |-- orders.dto.ts
+|           |-- index.ts
+|
+|-- prisma/
+|   |-- users/
+|   |   |-- schema.prisma
+|   |   |-- migrations/
+|   |
+|   |-- orders/
+|   |   |-- schema.prisma
+|   |   |-- migrations/
+|   |
+|   |-- users.config.ts
+|   |-- orders.config.ts
+|
+|-- generated/
+|   |-- users/
+|   |-- orders/
+|
+|-- .env.example
+|-- .gitignore
+|-- nest-cli.json
+|-- package.json
+|-- package-lock.json
+|-- tsconfig.json
+|-- README.md
 ```
 
-## Run tests
+A pasta `generated/` contém os clientes Prisma produzidos automaticamente e está incluída no `.gitignore`.
+
+Ela será criada novamente durante a preparação do ambiente.
+
+## 5. Pré-requisitos
+
+Para executar o projeto, é necessário possuir:
+
+- Node.js e npm instalados.
+- Docker Desktop instalado e em execução.
+- Git para clonar o repositório.
+- Um cliente HTTP, como Insomnia, para realizar os testes.
+
+O projeto foi desenvolvido e testado em ambiente Windows, utilizando Node.js 24, NestJS 12 e PostgreSQL 17.
+
+## 6. Instalação
+
+### 6.1. Clonar o repositório
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+git clone https://github.com/Bentim-Luccas/microservices-progweb2.git
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Acesse a pasta:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+cd microservices-progweb2
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project, run this and approve the code it prints at [observe.nestjs.com/link](https://observe.nestjs.com/link) - signing up for free if you have no account:
+### 6.2. Instalar as dependências
 
 ```bash
-$ npx @nestjs/observe link
+npm ci
 ```
 
-It installs `@nestjs/observe`, wires it into `AppModule` and `main.ts`, and writes the app key and secret into `.env`, which every `nest start` script (`start`, `start:dev`, `start:debug`) then loads. In production, set `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` in the environment instead.
+O comando utiliza o `package-lock.json` para instalar as dependências do projeto.
 
-Or do it by hand:
+### 6.3. Configurar as variáveis de ambiente
+
+Na raiz do projeto, copie o arquivo `.env.example`:
 
 ```bash
-$ npm install @nestjs/observe
+cp .env.example .env
 ```
 
-Then follow the [setup guide](https://docs.nestjs.com/observability/sdk) - it takes a single import and an app key.
+Edite o arquivo `.env` com as credenciais do PostgreSQL.
 
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
+Exemplo:
 
-## Resources
+```dotenv
+USERS_DATABASE_URL="postgresql://postgres:SENHA@127.0.0.1:5434/users_db"
+ORDERS_DATABASE_URL="postgresql://postgres:SENHA@127.0.0.1:5434/orders_db"
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Substitua `SENHA` pela senha configurada na sua instância PostgreSQL.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+**Importante:** o arquivo `.env` contém informações locais de conexão e não deve ser enviado ao repositório. O `.gitignore` já está configurado para ignorá-lo.
 
-## Support
+## 7. Configuração do PostgreSQL
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+O projeto utiliza dois bancos de dados independentes:
 
-## Stay in touch
+| Banco | Microserviço |
+|---|---|
+| `users_db` | Users Service |
+| `orders_db` | Orders Service |
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Durante o desenvolvimento, ambos foram criados na mesma instância PostgreSQL, executada em um contêiner Docker, com a porta `5434` exposta no computador.
 
-## License
+### 7.1. Criar o contêiner
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Caso ainda não exista uma instância PostgreSQL configurada, é possível criar uma utilizando:
+
+```bash
+docker run -d --name microservices_progweb2 -e POSTGRES_PASSWORD=SENHA -p 5434:5432 -v progweb2_pgdata:/var/lib/postgresql/data postgres:17
+```
+
+Substitua `SENHA` por uma senha escolhida para o ambiente local.
+
+Essa senha deverá corresponder à utilizada nas URLs de conexão do arquivo `.env`.
+
+Caso o contêiner já tenha sido criado anteriormente, basta iniciá-lo:
+
+```bash
+docker start microservices_progweb2
+```
+
+### 7.2. Criar os bancos de dados
+
+Execute:
+
+```bash
+docker exec -it microservices_progweb2 psql -U postgres -c "CREATE DATABASE users_db;"
+```
+
+```bash
+docker exec -it microservices_progweb2 psql -U postgres -c "CREATE DATABASE orders_db;"
+```
+
+Os bancos precisam existir antes da aplicação das migrations.
+
+### 7.3. Verificar os bancos
+
+Para listar os bancos da instância:
+
+```bash
+docker exec -it microservices_progweb2 psql -U postgres -l
+```
+
+O resultado deverá incluir `users_db` e `orders_db`.
+
+## 8. Configuração do Prisma
+
+O projeto utiliza **Prisma ORM 7**, com configurações independentes para cada microserviço.
+
+Cada serviço possui:
+
+- Seu próprio `schema.prisma`.
+- Seu próprio histórico de migrations.
+- Seu próprio Prisma Client gerado.
+- Sua própria variável de conexão com PostgreSQL.
+
+O acesso ao banco é realizado por meio de um `PrismaService` que utiliza o adaptador `PrismaPg`.
+
+### 8.1. Aplicar as migrations de Users
+
+```bash
+npx prisma migrate deploy --config prisma/users.config.ts
+```
+
+### 8.2. Aplicar as migrations de Orders
+
+```bash
+npx prisma migrate deploy --config prisma/orders.config.ts
+```
+
+Esses comandos aplicam as migrations já existentes no repositório.
+
+### 8.3. Gerar o Prisma Client de Users
+
+```bash
+npx prisma generate --config prisma/users.config.ts
+```
+
+### 8.4. Gerar o Prisma Client de Orders
+
+```bash
+npx prisma generate --config prisma/orders.config.ts
+```
+
+Os clientes serão gerados em:
+
+```text
+generated/users/
+generated/orders/
+```
+
+**Atenção:** como `generated/` não é versionada, é necessário executar os dois comandos de geração após clonar o projeto e instalar as dependências.
+
+Caso um schema Prisma seja alterado futuramente, o cliente correspondente deverá ser regenerado.
+
+## 9. Executando os microserviços
+
+A aplicação utiliza três processos NestJS independentes.
+
+Abra três terminais na raiz do projeto.
+
+### Terminal 1 — Users Service
+
+```bash
+npm run start:dev users
+```
+
+O microserviço ficará disponível para comunicação TCP em `127.0.0.1:3001`.
+
+### Terminal 2 — Orders Service
+
+```bash
+npm run start:dev orders
+```
+
+O microserviço utilizará a porta TCP `3002`.
+
+### Terminal 3 — API Gateway
+
+```bash
+npm run start:dev api-gateway
+```
+
+O API Gateway disponibilizará as rotas HTTP em:
+
+```text
+http://localhost:3000
+```
+
+**Importante:** todas as aplicações devem permanecer em execução durante os testes de integração.
+
+Os microserviços Users e Orders não disponibilizam suas operações diretamente por HTTP. As requisições externas devem ser encaminhadas ao API Gateway.
+
+## 10. Endpoints HTTP
+
+Todas as rotas são disponibilizadas pelo API Gateway na porta `3000`.
+
+### 10.1. Usuários
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| POST | `/users` | Cadastrar usuário |
+| GET | `/users` | Listar usuários |
+| GET | `/users/:id` | Buscar usuário pelo ID |
+| PATCH | `/users/:id` | Atualizar usuário |
+| DELETE | `/users/:id` | Excluir usuário sem pedidos |
+
+Exemplo de cadastro:
+
+**POST** `/users`
+
+```json
+{
+  "name": "Carlos",
+  "email": "carlos@email.com"
+}
+```
+
+Exemplo de atualização:
+
+**PATCH** `/users/1`
+
+```json
+{
+  "name": "Carlos Silva"
+}
+```
+
+O sistema utiliza validações para os dados recebidos, incluindo verificação de e-mail e tamanho mínimo do nome.
+
+### 10.2. Pedidos
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| POST | `/orders` | Criar pedido |
+| GET | `/orders` | Listar todos os pedidos |
+| GET | `/orders/:id` | Buscar pedido pelo ID |
+| GET | `/orders/user/:userId` | Listar pedidos de determinado usuário |
+| PATCH | `/orders/:id` | Atualizar pedido |
+| DELETE | `/orders/:id` | Excluir pedido |
+
+Exemplo de criação:
+
+**POST** `/orders`
+
+```json
+{
+  "userId": 1,
+  "description": "Notebook",
+  "total": 4500.00
+}
+```
+
+O `userId` informado precisa corresponder a um usuário existente.
+
+Exemplo de atualização:
+
+**PATCH** `/orders/1`
+
+```json
+{
+  "description": "Notebook Dell",
+  "total": 4200.00
+}
+```
+
+A atualização de pedidos permite modificar `description` e `total`, preservando o `userId` original.
+
+### Consulta de pedidos por usuário
+
+**GET** `/orders/user/1`
+
+Retorna um array com os pedidos associados ao usuário informado.
+
+Se o usuário não possuir pedidos, a consulta retornará um array vazio:
+
+```json
+[]
+```
+
+### Representação dos valores monetários
+
+O campo `total` é armazenado no PostgreSQL como `Decimal(10,2)`.
+
+O Prisma pode serializar esse valor como uma string na resposta JSON:
+
+```json
+{
+  "total": "4500"
+}
+```
+
+Esse comportamento preserva a representação decimal do valor.
+
+## 11. Comunicação TCP
+
+A comunicação entre as aplicações utiliza padrões de mensagens do NestJS.
+
+### Mensagens de Users
+
+| Mensagem | Responsabilidade |
+|---|---|
+| `users.create` | Criar usuário |
+| `users.findAll` | Listar usuários |
+| `users.findOne` | Buscar usuário |
+| `users.update` | Atualizar usuário |
+| `users.remove` | Excluir usuário |
+
+### Mensagens de Orders
+
+| Mensagem | Responsabilidade |
+|---|---|
+| `orders.create` | Criar pedido |
+| `orders.findAll` | Listar pedidos |
+| `orders.findOne` | Buscar pedido |
+| `orders.findByUser` | Consultar pedidos por usuário |
+| `orders.update` | Atualizar pedido |
+| `orders.remove` | Excluir pedido |
+
+Os controllers dos microserviços utilizam `@MessagePattern()` para receber as mensagens.
+
+O API Gateway utiliza `ClientProxy.send()` para encaminhar as solicitações e aguardar seus resultados.
+
+## 12. Contratos e validação
+
+Os contratos compartilhados estão localizados em:
+
+```text
+libs/contracts/src/
+```
+
+Os DTOs definem os dados esperados nas operações de usuários e pedidos.
+
+O projeto utiliza decorators de validação como:
+
+- `@IsString()` — valida valores textuais.
+- `@IsEmail()` — valida endereços de e-mail.
+- `@IsInt()` — valida números inteiros.
+- `@IsNumber()` — valida valores numéricos.
+- `@Min()` — define um valor mínimo.
+- `@MinLength()` — define um tamanho mínimo.
+- `@IsOptional()` — permite campos opcionais.
+
+As aplicações utilizam `ValidationPipe` com as opções `whitelist` e `transform`.
+
+O compartilhamento dos DTOs permite padronizar os contratos sem compartilhar diretamente as regras de negócio ou o acesso aos bancos de dados.
+
+## 13. Tratamento de erros e timeouts
+
+O projeto implementa tratamento de exceções RPC e tradução de erros para respostas HTTP.
+
+Os microserviços utilizam filtros de exceção para padronizar erros produzidos durante o processamento de mensagens TCP.
+
+O API Gateway possui um filtro responsável por converter erros recebidos em respostas HTTP.
+
+### Exemplos de comportamento
+
+| Situação | Status HTTP |
+|---|---|
+| Usuário inexistente | 404 |
+| Usuário possui pedidos e não pode ser excluído | 409 |
+| Timeout na comunicação | 504 |
+| Erro inesperado | 500 |
+
+As chamadas TCP do API Gateway possuem timeout de três segundos, implementado por meio do operador `timeout(3000)` do RxJS.
+
+O Orders Service também utiliza timeout ao consultar Users.
+
+Esses mecanismos evitam que determinadas requisições aguardem indefinidamente uma resposta de outro microserviço.
+
+O tratamento ainda possui limitações, especialmente na tradução de erros específicos do Prisma quando registros inexistentes são alterados ou excluídos.
+
+## 14. Regras de negócio
+
+### 14.1. Criação de pedidos
+
+Um pedido só pode ser cadastrado quando o usuário informado existir.
+
+O Orders Service realiza uma consulta TCP ao Users Service antes de persistir o pedido.
+
+Se o usuário não existir, a criação é rejeitada.
+
+### 14.2. Exclusão de usuários
+
+Um usuário que possui pedidos não pode ser excluído.
+
+Antes de executar a exclusão, o Users Service consulta o Orders Service para verificar a existência de pedidos associados ao usuário.
+
+Se houver pedidos, a operação é bloqueada com:
+
+```json
+{
+  "statusCode": 409,
+  "message": "Usuário possui pedidos cadastrados"
+}
+```
+
+Se não houver pedidos, a exclusão é permitida.
+
+Caso a consulta ao Orders Service falhe, a exclusão também é bloqueada, evitando prosseguir sem verificar a existência de pedidos.
+
+## 15. Exercícios práticos implementados
+
+Além da implementação principal do Tutorial 2, foram desenvolvidos os seis exercícios complementares propostos pelo professor.
+
+### Exercício 1 — Atualização e exclusão de pedidos
+
+Implementação das operações `orders.update` e `orders.remove`, incluindo suas respectivas rotas HTTP no API Gateway.
+
+### Exercício 2 — Consulta de pedidos por usuário
+
+Implementação da rota:
+
+```text
+GET /orders/user/:userId
+```
+
+A consulta utiliza o método `findMany()` do Prisma com filtro pelo campo `userId`.
+
+### Exercício 3 — Tratamento de usuário inexistente
+
+Implementação de tratamento para pedidos associados a usuários inexistentes, utilizando exceções RPC.
+
+Também foram tratados cenários de timeout e falhas na comunicação entre Orders e Users.
+
+### Exercício 4 — Padronização de erros RPC
+
+Criação de filtros de exceção nos microserviços Users e Orders e de um filtro HTTP no API Gateway.
+
+O objetivo é padronizar informações de erro e permitir respostas apropriadas aos clientes HTTP.
+
+### Exercício 5 — Timeout no API Gateway
+
+Aplicação de `timeout(3000)` às chamadas TCP realizadas pelo Gateway.
+
+Foi realizado um teste controlado com atraso artificial de quatro segundos no Orders Service, confirmando o retorno de `504 Gateway Timeout`.
+
+Após o teste, o atraso artificial foi removido.
+
+### Exercício 6 — Proteção contra exclusão de usuários com pedidos
+
+Implementação de comunicação entre Users e Orders antes da exclusão de usuários.
+
+Foram testados dois cenários:
+
+- Usuário com pedidos: exclusão bloqueada com `409 Conflict`.
+- Usuário sem pedidos: exclusão permitida.
+
+Os dois cenários foram validados utilizando o Insomnia.
+
+## 16. Testes realizados
+
+As funcionalidades foram verificadas manualmente utilizando o Insomnia.
+
+Os principais testes realizados foram:
+
+- Cadastro e listagem de usuários.
+- Consulta de usuários por ID.
+- Atualização e exclusão de usuários.
+- Cadastro de pedidos para usuários existentes.
+- Rejeição de pedidos para usuários inexistentes.
+- Listagem de pedidos.
+- Consulta de pedidos por ID.
+- Atualização e exclusão de pedidos.
+- Consulta de múltiplos pedidos de um usuário.
+- Tratamento de exceções RPC.
+- Simulação de timeout de comunicação.
+- Bloqueio de exclusão de usuários com pedidos.
+- Exclusão de usuários sem pedidos.
+
+As aplicações também foram compiladas individualmente utilizando os comandos do NestJS CLI.
+
+### Comandos de compilação
+
+```bash
+npx nest build users
+```
+
+```bash
+npx nest build orders
+```
+
+```bash
+npx nest build api-gateway
+```
+
+Esses testes não substituem uma suíte automatizada de testes unitários e de integração.
+
+## 17. Limitações conhecidas
+
+O projeto possui finalidade acadêmica e não está preparado para utilização em produção.
+
+Entre as limitações estão:
+
+- Ausência de autenticação e autorização.
+- Necessidade de tratamento mais específico para determinados erros do Prisma.
+- Ausência de mecanismos completos de retentativa e circuit breaker.
+- Ausência de observabilidade distribuída.
+- Necessidade de proteção adicional da comunicação interna entre serviços.
+- Possibilidade de condições de corrida entre operações nos diferentes bancos de dados.
+- Ausência de transações distribuídas para operações que envolvem diferentes microserviços.
+
+Essas limitações demonstram alguns dos desafios existentes em arquiteturas distribuídas.
+
+## 18. Próxima etapa do conteúdo
+
+O próximo tutorial do professor abordará **RabbitMQ e arquitetura orientada a eventos**.
+
+A evolução prevista inclui um microserviço de notificações e a publicação de eventos, como `order.created`.
+
+Essa abordagem permitirá estudar conceitos como filas, exchanges, routing keys, acknowledgements, retries e dead-letter queues.
+
+O presente projeto corresponde ao **Tutorial 2**, com comunicação TCP e operações baseadas principalmente no padrão de requisição e resposta.
+
+## 19. Referência acadêmica
+
+Projeto desenvolvido com base no material didático **Tutorial NestJS — Microserviços, Parte 2: Evoluindo o projeto com CRUD completo, Prisma, Orders Service e comunicação entre microserviços**, disponibilizado na disciplina Programação Web II.
+
+As funcionalidades adicionais da Parte 8 foram implementadas como exercícios de consolidação dos conceitos apresentados no tutorial.
+
+---
+
+**Finalidade:** estudo e prática de arquitetura de microserviços com NestJS, Prisma ORM e PostgreSQL.
